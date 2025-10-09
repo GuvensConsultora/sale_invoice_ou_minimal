@@ -157,6 +157,7 @@ Módulo para **Odoo 17** que hace fluir la **Unidad Operativa (Operating Unit, O
 
 ## Mantenimiento
 
-- Autor: Tu equipo
+- Autor: Cerdá Horacio.
+- Partner: Güvens
 - Licencia: LGPL-3
 - Issues y PRs: repositorio del proyecto
