@@ -1,0 +1,38 @@
+# -*- coding: utf-8 -*-
+from odoo import models
+
+class SaleOrder(models.Model):
+    _inherit = "sale.order"
+
+    def _prepare_invoice(self):
+        """
+        Odoo 17: al crear la factura desde SO o desde el wizard de anticipo,
+        forzamos OU y Diario compatibles para evitar el constraint de OCA.
+        - OU: primero intenta tomar del SO (si el campo existe), si no, del usuario.
+        - Diario: busca un diario de ventas activo de la misma compañía y con esa OU.
+        No tocamos account.move ni action_post para evitar recursiones.
+        """
+        self.ensure_one()
+        vals = super()._prepare_invoice()
+
+        # 1) Determinar OU (tolerante: si SO no tiene el campo, usamos la del usuario)
+        ou_on_so = getattr(self, "operating_unit_id", False) and self.operating_unit_id or False
+        ou = ou_on_so or self.env.user.default_operating_unit_id
+
+        # 2) Inyectar OU a la factura si no viene ya
+        if ou and not vals.get("operating_unit_id"):
+            vals["operating_unit_id"] = ou.id
+
+        # 3) Seleccionar Diario por UO (tipo: sale)
+        if ou:
+            company = self.company_id or self.env.company
+            journal = self.env["account.journal"].sudo().search([
+                ("type", "=", "sale"),
+                ("company_id", "=", company.id),
+                ("operating_unit_id", "=", ou.id),
+                ("active", "=", True),
+            ], limit=1)
+            if journal:
+                vals["journal_id"] = journal.id
+
+        return vals
