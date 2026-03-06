@@ -1,11 +1,14 @@
 # models/sale_order.py
 # -*- coding: utf-8 -*-
+import logging
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
+_logger = logging.getLogger(__name__)
+
+
 class SaleOrder(models.Model):
     _inherit = "sale.order"
-
 
     operating_unit_id = fields.Many2one(
         "operating.unit",
@@ -25,6 +28,15 @@ class SaleOrder(models.Model):
         if ou and ou.company_id == self.env.company:
             return ou
         return False
+
+    def _empresa_usa_uo(self):
+        """True si la empresa del pedido tiene al menos una UO configurada.
+        Por qué: empresas como la S.H. no usan UO. Toda la lógica de UO
+        debe saltearse para evitar errores de acceso (ir.rules)."""
+        company = self.company_id or self.env.company
+        return bool(self.env["operating.unit"].sudo().search_count([
+            ("company_id", "=", company.id),
+        ]))
 
     def _prepare_invoice(self):
         """Odoo 17: inyecta UO y diario coherentes en la factura.
@@ -58,3 +70,24 @@ class SaleOrder(models.Model):
 
         vals["journal_id"] = journal.id
         return vals
+
+    @api.model
+    def _register_hook(self):
+        """Limpia operating_unit_id de pedidos cuya UO no pertenece a su empresa.
+        Por qué: pedidos existentes de la S.H. tienen UO de 'Lupatini y CIA'
+        cargada por el default anterior. Las ir.rules de operating_unit bloquean
+        la lectura → error 'no tiene acceso leer Unidad Operativa'.
+        Se ejecuta en cada startup para cubrir DB persistentes (Odoo.sh staging)."""
+        self.env.cr.execute("""
+            UPDATE sale_order so
+            SET operating_unit_id = NULL
+            FROM operating_unit ou
+            WHERE so.operating_unit_id = ou.id
+              AND so.company_id != ou.company_id
+        """)
+        if self.env.cr.rowcount:
+            _logger.info(
+                "sale_invoice_ou_minimal: limpiados %d pedidos con UO de otra empresa",
+                self.env.cr.rowcount,
+            )
+        return super()._register_hook()
