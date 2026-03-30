@@ -52,7 +52,11 @@ class SaleOrder(models.Model):
         ou = self.operating_unit_id
         company = self.company_id or self.env.company
         if not ou or ou.company_id != company:
-            vals.pop("operating_unit_id", None)
+            # Forzar False: no alcanza con pop() porque account.move tiene
+            # default=_default_operating_unit_id que re-inyecta la UO del
+            # usuario (que puede ser de otra empresa). Con False explícito
+            # se sobreescribe el default.
+            vals["operating_unit_id"] = False
             return vals
 
         # Inyectar UO a la factura
