@@ -45,16 +45,17 @@ class SaleOrder(models.Model):
         self.ensure_one()
         vals = super()._prepare_invoice()
 
-        # Por qué: si no hay UO en el pedido, la empresa no usa UO → flujo nativo Odoo
+        # Por qué: si no hay UO en el pedido o la UO es de otra empresa,
+        # la empresa no usa UO → flujo nativo Odoo
         ou = self.operating_unit_id
-        if not ou:
+        company = self.company_id or self.env.company
+        if not ou or ou.company_id != company:
             return vals
 
         # Inyectar UO a la factura
         vals["operating_unit_id"] = ou.id
 
         # Encontrar diario de ventas que coincida con UO y compañía
-        company = self.company_id or self.env.company
         journal = self.env["account.journal"].sudo().search([
             ("type", "=", "sale"),
             ("company_id", "=", company.id),
