@@ -46,10 +46,13 @@ class SaleOrder(models.Model):
         vals = super()._prepare_invoice()
 
         # Por qué: si no hay UO en el pedido o la UO es de otra empresa,
-        # la empresa no usa UO → flujo nativo Odoo
+        # la empresa no usa UO → flujo nativo Odoo.
+        # super() (OCA sale_operating_unit) ya inyectó operating_unit_id en vals,
+        # hay que sacarlo para evitar _check_company en account.move.
         ou = self.operating_unit_id
         company = self.company_id or self.env.company
         if not ou or ou.company_id != company:
+            vals.pop("operating_unit_id", None)
             return vals
 
         # Inyectar UO a la factura
